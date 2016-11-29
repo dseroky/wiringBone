@@ -278,6 +278,26 @@ PWM::PWM()
   pwmPin[count] = unexported;
 }
 
+//Since some of the chips have two channels, we have to check to ensure we use the correct channel
+uint8_t PWM::getChipNumber(uint8_t pin)
+{
+  if (pin > 0 && pin < 8 )
+  { 
+    switch(pin)
+    {
+      case 1: return 0;
+      case 5: return 4;
+      case 7: return 6;
+      default: return pin;
+    }
+  }
+  else
+  {
+    perror("Invalid PWM pin"); 
+    return -1;
+  }
+}
+
 int PWM::gpioNumToPwmMap(uint8_t gpioNum)
 {
   switch(gpioNum)
@@ -308,13 +328,17 @@ int PWM::exportPin(uint8_t gpioPin)
     perror("PWM pin already exported");
     return -1;
   }
+  char path[31];
   FILE *fd;
-  if((fd = fopen("/sys/class/pwm/export", "w")) == NULL)
+  uint8_t chipNumber = getChipNumber(pin);
+  uint8_t chipChannel = (pin <= chipNumber) ? 0:1;
+  sprintf(path, "/sys/class/pwm/pwmchip%d/export", chipNumber);
+  if((fd = fopen(path, "w")) == NULL)
   {
     perror("PWM export failed");
     return -1;
   }
-  if((fprintf(fd, "%d", pin)) < 0)
+  if((fprintf(fd, "%d", chipChannel)) < 0)
   {
     perror("PWM export failed");
     return -1;
@@ -331,23 +355,29 @@ int PWM::unexportPin(uint8_t gpioPin)
     perror("PWM pin already unexported");
     return -1;
   }
+  char path[33];
   FILE *fd;
-  if((fd = fopen("/sys/class/pwm/unexport", "w")) == NULL)
+  uint8_t chipNumber = getChipNumber(pin);
+  uint8_t chipChannel = (pin <= chipNumber) ? 0:1;
+  sprintf(path, "/sys/class/pwm/pwmchip%d/unexport", chipNumber);
+  if((fd = fopen(path, "w")) == NULL)
   {
     perror("PWM unexport failed");
     return -1;
   }
-  fprintf(fd, "%d", pin);
+  fprintf(fd, "%d", chipChannel);
   fclose(fd);
   return pin;
 }
-
+ 
 void PWM::pwmControl(uint8_t gpioPin, Control control)
 {
   uint8_t pin = gpioNumToPwmMap(gpioPin);
-  char path[24];
+  char path[36];
   FILE *fd;
-  sprintf(path, "/sys/class/pwm/pwm%d/run", pin);
+  uint8_t chipNumber = getChipNumber(pin);
+  uint8_t chipChannel = (pin <= chipNumber) ? 0:1;
+  sprintf(path, "/sys/class/pwm/pwmchip%d/pwm%d/enable", chipNumber, chipChannel);
   if((fd = fopen(path, "w")) == NULL)
   {
     perror("PWM control failed");
@@ -374,10 +404,12 @@ void PWM::setTimePeriodns (uint8_t gpioPin, uint32_t period_ns)
   FILE *fd;
   if(period_ns > 0)
   {
-    sprintf(path, "/sys/class/pwm/pwm%d/period_ns", pin);
+    uint8_t chipNumber = getChipNumber(pin);
+    uint8_t chipChannel = (pin <= chipNumber) ? 0:1;
+    sprintf(path, "/sys/class/pwm/pwmchip%d/pwm%d/period", chipNumber, chipChannel);
     if((fd = fopen(path, "w")) == NULL)
     {
-      perror("PWM priod write failed");
+      perror("PWM period write failed");
     }
     fprintf(fd, "%d", period_ns);
     fclose(fd);
@@ -400,11 +432,13 @@ void PWM::setFrequency (uint8_t gpioPin, uint32_t freq_hz)
 void PWM::setPulseWidthns (uint8_t gpioPin, uint32_t period_ns)
 {
   uint8_t pin = gpioNumToPwmMap(gpioPin);
-  char path[36];
+  char path[40];
   FILE *fd;
   if(period_ns <= this->period[pin])
   {
-    sprintf(path, "/sys/class/pwm/pwm%d/duty_ns", pin);
+    uint8_t chipNumber = getChipNumber(pin);
+    uint8_t chipChannel = (pin <= chipNumber) ? 0:1;
+    sprintf(path, "/sys/class/pwm/pwmchip%d/pwm%d/duty_cycle", chipNumber, chipChannel);
     if((fd = fopen(path, "w")) == NULL)
     {
       perror("PWM duty write failed");
