@@ -122,6 +122,7 @@ class PWM
   void pwmControl(uint8_t gpioPin, Control control);
 
   int gpioNumToPwmMap(uint8_t gpioNum);
+  uint8_t getChipNumber(uint8_t pin);
 };
 
 extern PWM *_pwm;
